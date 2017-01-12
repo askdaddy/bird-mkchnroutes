@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+CHNROUTES_LOCAL="/var/lib/chnroutes"
+CHNROUTES_TEMP=$(mktemp)
+
+STATIC_ROUTE_CFG="/etc/bird/peers4/static-cn.conf"
+DEF_ROUTES=( 192.168.1.1 192.168.2.1 )
+DEF_ROUTES_LEN=${#DEF_ROUTES[@]}
+
+rir -c CN | egrep -v '^#' > "${CHNROUTES_TEMP}"
+if [ $(wc -c < "${CHNROUTES_TEMP}") -le 16 ]; then
+  exit
+fi
+
+mv -f "${CHNROUTES_TEMP}" "${CHNROUTES_LOCAL}"
+
+# Write to bird config
+echo "protocol static static_chnroutes {" > "${STATIC_ROUTE_CFG}"
+awk -v a="${DEF_ROUTES[*]}" -v len="${DEF_ROUTES_LEN}" 'BEGIN {split(a,A,/ /)} \
+{idx=(NR % len); \
+print "    route " $1 " via " A[idx+1] ";"\
+}' "${CHNROUTES_LOCAL}" >> "${STATIC_ROUTE_CFG}"
+echo "}" >> "${STATIC_ROUTE_CFG}"
